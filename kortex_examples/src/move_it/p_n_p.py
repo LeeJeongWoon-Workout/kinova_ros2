@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 
+# We use MoveIT::Grasping
+
 import sys
 import time
 import rospy
@@ -12,26 +14,35 @@ import math
 from std_srvs.srv import Empty
 import copy
 from moveit_commander.conversions import pose_to_list, list_to_pose
+from geometry_msgs.msg import Pose
+from moveit_msgs.msg import CollisionObject
+from shape_msgs.msg import SolidPrimitive
+from tf.transformations import quaternion_from_euler
 
+(X, Y, Z, W) = (0, 1, 2, 3)
+OPEN = 0.9
+CLOSE = 0.15
+PICK_ORIENTATION_EULER = [-math.pi / 2, 0, 0]
+PLACE_ORIENTATION_EULER = [-math.pi / 2, 0, -math.pi / 2]
 
-def wait_for_state_update(scene, box_name, box_is_known=False, box_is_attached=False, timeout=4):
-    start = rospy.get_time()
-    seconds = rospy.get_time()
-    while (seconds - start < timeout) and not rospy.is_shutdown():
-        # Test if the box is in attached objects
-        attached_objects = scene.get_attached_objects([box_name])
-        is_attached = len(attached_objects.keys()) > 0
+def create_collision_object(id, dimensions, pose):
+    object = CollisionObject()
+    object.id = id
+    object.header.frame_id = 'base_link'
 
-        # Note that attaching the box will remove it from known_objects
-        is_known = box_name in scene.get_known_object_names()
+    solid = SolidPrimitive()
+    solid.type = solid.BOX
+    solid.dimensions = dimensions
+    object.primitives = [solid]
 
-        # Test if we are in the expected state
-        if (box_is_attached == is_attached) and (box_is_known == is_known):
-            return True
+    object_pose = Pose()
+    object_pose.position.x = pose[X]
+    object_pose.position.y = pose[Y]
+    object_pose.position.z = pose[Z]
 
-        rospy.sleep(0.1)
-        seconds = rospy.get_time()
-    return False
+    object.primitive_poses = [object_pose]
+    object.operation = object.ADD
+    return object
 
 
 def main():
@@ -58,36 +69,26 @@ def main():
     gripper_joint_name = gripper_joint_names[0]
 
 
+
+    
     #Setting Environment
-    table_0 = geometry_msgs.msg.PoseStamped()
-    table_0.header.frame_id = arm_group.get_planning_frame()
-    table_0.pose.position.x =0.5
-    table_0.pose.position.y =0
-    table_0.pose.position.z =0.05
-    table_0.pose.orientation.w = 1.0   
+    table_0=create_collision_object(id='table_0',
+                                    dimensions=[0.5,0.5,0.1],
+                                    pose=[0.5,0,0.05])
+                
+    cube_0=create_collision_object(id='cube_0',
+                                    dimensions=[0.05,0.05,0.05],
+                                    pose=[0.35,0,0.13])
 
-    scene.add_box('table_0', table_0, size=(0.5, 0.5, 0.1))
-    wait_for_state_update(scene=scene,box_name='table_0',box_is_known=True)
+    cube_1=create_collision_object(id='cube_1',
+                                    dimensions=[0.05,0.05,0.05],
+                                    pose=[0.35,0,0.18])
 
-    cube_0 = geometry_msgs.msg.PoseStamped()
-    cube_0.header.frame_id = arm_group.get_planning_frame()
-    cube_0.pose.position.x =0.35
-    cube_0.pose.position.y =0
-    cube_0.pose.position.z =0.13
-    cube_0.pose.orientation.w = 1.0                            
+                 
 
-    scene.add_box('cube_0', cube_0,size=(0.05, 0.05, 0.05))
-    wait_for_state_update(scene=scene,box_name='cube_0',box_is_known=True)
-
-    cube_1 = geometry_msgs.msg.PoseStamped()
-    cube_1.header.frame_id = arm_group.get_planning_frame()
-    cube_1.pose.position.x =0.35
-    cube_1.pose.position.y =0
-    cube_1.pose.position.z =0.18
-    cube_1.pose.orientation.w = 1.0                            
-
-    scene.add_box('cube_1', cube_1,size=(0.05, 0.05, 0.05))
-    wait_for_state_update(scene=scene,box_name='cube_1',box_is_known=True)
+    scene.add_object(table_0)
+    scene.add_object(cube_0)
+    scene.add_object(cube_1)
 
     # move to pose goal
     rospy.loginfo("Going to home")
